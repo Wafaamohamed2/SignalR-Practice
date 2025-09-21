@@ -19,6 +19,7 @@ namespace SignalR.Controllers
         public IActionResult GetOnlineUsers()
         {
             var users = _context.UserConnections
+                  .Where(x => x.IsConnected)
                 .Select(x => new
                 {
                     x.Id,
@@ -31,10 +32,11 @@ namespace SignalR.Controllers
         }
 
         [HttpGet("{userId}")]
-        public IActionResult GetUserConnections(string userId) {
+        public IActionResult GetUserConnections(string userId)
+        {
 
             var connections = _context.UserConnections
-                .Where(x => x.UserId == userId)
+                .Where(x => x.UserId == userId && x.IsConnected)
                 .Select(c => new
                 {
                     c.ConnectionId,
@@ -46,7 +48,7 @@ namespace SignalR.Controllers
                 return NotFound($"No active connections found for user {userId}");
 
             return Ok(connections);
-        
+
         }
     }
 }
