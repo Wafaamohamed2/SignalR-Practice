@@ -16,7 +16,7 @@
             margin-bottom: 10px;
         }
 
-        input[type="text"] {
+        input[type="text"], input[type="password"] {
             padding: 8px;
             margin-right: 10px;
             border: 1px solid #ccc;
@@ -89,6 +89,13 @@
         Disconnected
     </div>
 
+    <!-- Login Form -->
+    <div class="input-group">
+        <input type="text" id="loginUsername" placeholder="Username" />
+        <input type="password" id="loginPassword" placeholder="Password" />
+        <input type="button" id="loginButton" value="Login" />
+    </div>
+
     <div class="input-group">
         <input type="text" id="userInput" placeholder="Enter your name" />
         <span>Current User: <span id="currentUser">Not set</span></span>
@@ -105,17 +112,18 @@
         <input type="button" id="sendGroupButton" value="Send to Group" disabled />
     </div>
 
-
     <ul id="messageList"></ul>
 
     <script>
-
         let connection;
         let currentUserId = null;
         let isConnected = false;
-
+        let token = localStorage.getItem("jwtToken");
 
         // DOM elements
+        const loginUsername = document.getElementById("loginUsername");
+        const loginPassword = document.getElementById("loginPassword");
+        const loginButton = document.getElementById("loginButton");
         const userInput = document.getElementById("userInput");
         const messageInput = document.getElementById("messageInput");
         const sendButton = document.getElementById("sendButton");
@@ -126,14 +134,14 @@
         const currentUserSpan = document.getElementById("currentUser");
         const groupInput = document.getElementById("gtxt");
 
-
-        //1. Initialize  connection
+        // Initialize connection
         function initializeConnection() {
             connection = new signalR.HubConnectionBuilder()
-                .withUrl("/chatHub")
+                .withUrl("/chatHub", {
+                    accessTokenFactory: () => token
+                })
                 .withAutomaticReconnect()
                 .build();
-
 
             connection.on("ReceiveMessage", (name, message) => {
                 addMessageToList(`${name}: ${message}`);
@@ -144,7 +152,7 @@
             });
 
             connection.on("ReceiveGroupMessage", (name, gName, message) => {
-                addMessageToList(`[${gName}] ${name}: ${message}`);
+                addMessageToList(`${name}: ${message}`);
             });
 
             connection.onclose(() => {
@@ -161,29 +169,23 @@
                 updateConnectionStatus(true);
                 addMessageToList("✅ Reconnected", "notification");
                 if (currentUserId) {
-                    registerUser(currentUserId);
+                    registerUser();
                 }
             });
-
         }
 
-        // Start Connection
+        // Start connection
         function startConnection() {
-            const userName = userInput.value.trim();
-            if (!userName) {
-                alert("Please enter your name first");
-                userInput.focus();
+            if (!token) {
+                alert("You must login first!");
                 return;
             }
-
-            currentUserId = userName;
-            currentUserSpan.textContent = userName;
 
             connection.start()
                 .then(() => {
                     updateConnectionStatus(true);
                     addMessageToList("✅ Connected to the chat server", "notification");
-                    return registerUser(currentUserId);
+                    return registerUser();
                 })
                 .catch(err => {
                     console.error(err.toString());
@@ -193,9 +195,9 @@
         }
 
         // Register user with server
-        function registerUser(userId) {
+        function registerUser() {
             if (connection && isConnected) {
-                return connection.invoke("RegisterUser", userId)
+                return connection.invoke("RegisterUser")
                     .catch(err => {
                         console.error("RegisterUser failed: ", err);
                         addMessageToList("❌ Registration failed: " + err.message, "error");
@@ -209,23 +211,21 @@
             connectionStatus.textContent = connected ? "Connected" : "Disconnected";
             connectionStatus.className = `connection-status ${connected ? "connected" : "disconnected"}`;
 
-            // Enable/disable buttons based on connection status
             sendButton.disabled = !connected;
             joinButton.disabled = !connected;
             sendGroupButton.disabled = !connected;
         }
-       
+
         // Add message to the list
         function addMessageToList(message, cssClass = "") {
             const li = document.createElement("li");
             li.textContent = message;
-            if (cssClass) {
-                li.className = cssClass;
-            }
+            if (cssClass) li.className = cssClass;
             messageList.appendChild(li);
             messageList.scrollTop = messageList.scrollHeight;
         }
 
+        // Event Listeners
         userInput.addEventListener("keypress", (e) => {
             if (e.key === "Enter" && !isConnected) {
                 startConnection();
@@ -248,23 +248,14 @@
 
         joinButton.addEventListener("click", () => {
             const groupName = groupInput.value.trim();
-            const userName = currentUserId;
-
             if (!groupName) {
                 alert("Please enter a group name");
                 groupInput.focus();
                 return;
             }
 
-            if (!userName) {
-                alert("Please set your name first");
-                return;
-            }
-
-            connection.invoke("JoinGroup", groupName, userName)
-                .then(() => {
-                    addMessageToList(`📝 You joined group: ${groupName}`, "notification");
-                })
+            connection.invoke("JoinGroup", groupName)
+                .then(() => addMessageToList(`📝 You joined group: ${groupName}`, "notification"))
                 .catch(err => {
                     console.error("JoinGroup failed: ", err);
                     addMessageToList("❌ Failed to join group: " + err.message, "error");
@@ -274,82 +265,97 @@
         sendGroupButton.addEventListener("click", () => {
             const groupName = groupInput.value.trim();
             const message = messageInput.value.trim();
-            const userName = currentUserId;
 
             if (!groupName) {
                 alert("Please enter a group name");
                 groupInput.focus();
                 return;
             }
-
             if (!message) {
                 alert("Please enter a message");
                 messageInput.focus();
                 return;
             }
 
-            if (!userName) {
-                alert("Please set your name first");
-                return;
-            }
-
-            connection.invoke("SendMessageToGroup", groupName, userName, message)
-                .then(() => {
-                    messageInput.value = "";
-                })
+            connection.invoke("SendMessageToGroup", groupName, message)
+                .then(() => { messageInput.value = ""; })
                 .catch(err => {
                     console.error("SendMessageToGroup failed: ", err);
                     addMessageToList("❌ Failed to send group message: " + err.message, "error");
                 });
         });
 
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            const userName = currentUserId;
-
-            if (!message) {
-                alert("Please enter a message");
-                messageInput.focus();
+        // Login
+        loginButton.addEventListener("click", async () => {
+            const username = loginUsername.value.trim();
+            const password = loginPassword.value.trim();
+            if (!username || !password) {
+                alert("Enter username and password");
                 return;
             }
 
-            if (!userName) {
-                alert("Please set your name first");
-                return;
-            }
-
-            connection.invoke("SendMessage", userName, message)
-                .then(() => {
-                    messageInput.value = "";
-                })
-                .catch(err => {
-                    console.error("SendMessage failed: ", err);
-                    addMessageToList("❌ Failed to send message: " + err.message, "error");
+            try {
+                const response = await fetch("/api/Auth/Login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username, password })
                 });
-        }
 
-        // Initialize when page loads
+                if (!response.ok) {
+                    alert("Login failed");
+                    return;
+                }
+
+                const data = await response.json();
+                token = data.token;
+                localStorage.setItem("jwtToken", token);
+                currentUserId = username;
+                currentUserSpan.textContent = username;
+                initializeConnection();
+                startConnection();
+            } catch (err) {
+                console.error("Login error: ", err);
+                alert("Login request failed");
+            }
+        });
+
+        // Initialize on page load
         window.addEventListener("load", () => {
             initializeConnection();
             updateConnectionStatus(false);
 
-            // Try to get stored user info
             const storedUserId = sessionStorage.getItem("userId");
             if (storedUserId) {
                 userInput.value = storedUserId;
                 currentUserSpan.textContent = storedUserId;
             }
 
+            if (token) startConnection();
             userInput.focus();
         });
 
-        // Save user info when page unloads
+        // Save user info on unload
         window.addEventListener("beforeunload", () => {
             if (currentUserId) {
                 sessionStorage.setItem("userId", currentUserId);
             }
         });
 
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) {
+                alert("Please enter a message");
+                messageInput.focus();
+                return;
+            }
+
+            connection.invoke("SendMessage", message)
+                .then(() => { messageInput.value = ""; })
+                .catch(err => {
+                    console.error("SendMessage failed: ", err);
+                    addMessageToList("❌ Failed to send message: " + err.message, "error");
+                });
+        }
     </script>
 </body>
 </html>

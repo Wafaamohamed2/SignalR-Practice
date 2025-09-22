@@ -1,9 +1,11 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using SignalR.Models;
 using System.Security.Claims;
 
 namespace SognalR.HubConfig
 {
+    [Authorize] // Ensure only authenticated users can access the hub
     public class ChatHub : Hub
     {
         private readonly AppDbContext _context;
@@ -14,8 +16,14 @@ namespace SognalR.HubConfig
         }
 
         // Register user connection and add to groups for reconnection
-        public async Task RegisterUser(string userId)
+        public async Task RegisterUser()
         {
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null)
+            {
+                throw new Exception("User not authenticated");
+            }
+
             // Mark existing connections as disconnected
             var existingConnections = _context.UserConnections
                 .Where(c => c.UserId == userId && c.IsConnected);
@@ -52,15 +60,22 @@ namespace SognalR.HubConfig
             }
         }
 
-        public async Task SendMessage(string name, string message)
+        public async Task SendMessage( string message)
         {
+            var name = Context.User?.Identity?.Name ?? "Unknown";
             await Clients.All.SendAsync("ReceiveMessage", name, message);
         }
 
-        public async Task  JoinGroup(string gName, string name)
+        public async Task  JoinGroup(string gName)
         {
             try
             {
+                var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var name = Context.User?.Identity?.Name ?? "Anonymous";
+
+                if (string.IsNullOrEmpty(userId))
+                    throw new HubException("User not authenticated");
+
                 await Groups.AddToGroupAsync(Context.ConnectionId, gName);
 
                 var connection = _context.UserConnections
@@ -102,16 +117,16 @@ namespace SognalR.HubConfig
                 await Clients.OthersInGroup(gName).SendAsync("ShowWhoJoin", name, gName);
             }         
             catch (Exception ex)
-            {
-                // Handle exceptions (e.g., log the error)
+            {     
                 Console.WriteLine($"Error joining group: {ex.Message}");
                 throw; // Optionally rethrow or handle the exception as needed
             }
 
         }
 
-        public async Task SendMessageToGroup(string gName, string name, string message)
+        public async Task SendMessageToGroup(string gName, string message)
         {
+            var name = Context.User?.Identity?.Name ?? "Unknown";
             await Clients.Group(gName).SendAsync("ReceiveGroupMessage", name, gName,message);
         }
 
