@@ -1,11 +1,14 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using SignalR.Models;
+using System.Security.Claims;
 
 namespace SignalR.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class ConnectionsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -32,8 +35,12 @@ namespace SignalR.Controllers
         }
 
         [HttpGet("{userId}")]
-        public IActionResult GetUserConnections(string userId)
+        public IActionResult GetUserConnections()
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(userId))
+                return Unauthorized("User not authenticated");
 
             var connections = _context.UserConnections
                 .Where(x => x.UserId == userId && x.IsConnected)
