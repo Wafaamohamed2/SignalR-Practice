@@ -147,13 +147,14 @@
                 addMessageToList(`${name}: ${message}`);
             });
 
-            connection.on("ShowWhoJoin", (name, gName) => {
-                addMessageToList(`🔔 ${name} joined group (${gName})`, "notification");
-            });
 
             connection.on("ReceiveGroupMessage", (name, gName, message) => {
                 addMessageToList(`${name}: ${message}`);
             });
+
+            connection.on("ReceiveNotification", (title, notification) => {
+                addMessageToList(`🔔 ${title}: ${notification}`, "notification");
+            })
 
             connection.onclose(() => {
                 updateConnectionStatus(false);
@@ -245,8 +246,8 @@
         });
 
         sendButton.addEventListener("click", sendMessage);
-
-        joinButton.addEventListener("click", () => {
+  
+        joinButton.addEventListener("click", async () => {
             const groupName = groupInput.value.trim();
             if (!groupName) {
                 alert("Please enter a group name");
@@ -254,35 +255,64 @@
                 return;
             }
 
-            connection.invoke("JoinGroup", groupName)
-                .then(() => addMessageToList(`📝 You joined group: ${groupName}`, "notification"))
-                .catch(err => {
-                    console.error("JoinGroup failed: ", err);
-                    addMessageToList("❌ Failed to join group: " + err.message, "error");
+            try {
+                const response = await fetch("/api/Groups/Join", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        groupName: groupName
+                    })
                 });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    addMessageToList("❌ Failed to join group: " + err.message, "error");
+                    return;
+                }
+
+                const data = await response.json();
+                addMessageToList("✅ " + data.message, "notification");
+
+          
+            } catch (err) {
+                console.error("JoinGroup API failed: ", err);
+                addMessageToList("❌ Request failed", "error");
+            }
         });
 
-        sendGroupButton.addEventListener("click", () => {
+        sendGroupButton.addEventListener("click", async () => {
             const groupName = groupInput.value.trim();
             const message = messageInput.value.trim();
+            if (!groupName || !message) return;
 
-            if (!groupName) {
-                alert("Please enter a group name");
-                groupInput.focus();
-                return;
-            }
-            if (!message) {
-                alert("Please enter a message");
-                messageInput.focus();
-                return;
-            }
-
-            connection.invoke("SendMessageToGroup", groupName, message)
-                .then(() => { messageInput.value = ""; })
-                .catch(err => {
-                    console.error("SendMessageToGroup failed: ", err);
-                    addMessageToList("❌ Failed to send group message: " + err.message, "error");
+            try {
+                const response = await fetch("/api/Messages/SendToGroup", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        groupName: groupName,
+                        message: message
+                    })
                 });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    addMessageToList("❌ " + data.message, "error");
+                    return;
+                }
+
+                messageInput.value = "";
+                addMessageToList("📤 " + data.message, "notification");
+            } catch (err) {
+                console.error(err);
+            }
         });
 
         // Login
