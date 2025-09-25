@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using SignalR.Models;
+using SognalR.HubConfig;
 using System.Security.Claims;
 
 namespace SignalR.Controllers
@@ -12,10 +14,13 @@ namespace SignalR.Controllers
     public class ConnectionsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public ConnectionsController(AppDbContext context)
+
+        public ConnectionsController(AppDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         [HttpGet("Online")]
@@ -57,5 +62,6 @@ namespace SignalR.Controllers
             return Ok(connections);
 
         }
+
     }
 }
