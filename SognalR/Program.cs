@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using SignalR.Models;
+using SignalR.Services;
 using SognalR.HubConfig;
 using System.Text;
 
@@ -54,6 +55,7 @@ namespace SognalR
 
             });
             builder.Services.AddSignalR();
+            builder.Services.AddScoped<IConnectionService, ConnectionService>();
 
             // Identity services
             builder.Services.AddIdentity<IdentityUser, IdentityRole>()

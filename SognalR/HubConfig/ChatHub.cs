@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using SignalR.Models;
+using SignalR.Services;
 using System.Security.Claims;
 
 namespace SognalR.HubConfig
@@ -8,12 +10,16 @@ namespace SognalR.HubConfig
     [Authorize] // Ensure only authenticated users can access the hub
     public class ChatHub : Hub
     {
+        private readonly IConnectionService _connectionService;
         private readonly AppDbContext _context;
 
-        public ChatHub(AppDbContext context)
+        public ChatHub(IConnectionService connectionService, AppDbContext context)
         {
+            _connectionService = connectionService;
             _context = context;
         }
+
+
 
         // Register user connection and add to groups for reconnection
         public async Task RegisterUser()
@@ -82,23 +88,38 @@ namespace SognalR.HubConfig
 
         public override async Task OnConnectedAsync()
         {
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await _connectionService.ConnectAsync(userId, Context.ConnectionId);
+
+
+                // Add user to all their existing groups
+                var userGroups = await _context.UserGroups
+                    .Include(ug => ug.Group)
+                    .Where(ug => ug.UserId == userId)
+                    .Select(ug => ug.Group.Name)
+                    .ToListAsync();
+
+                foreach (var groupName in userGroups)
+                {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+                }
+
+                await Clients.Caller.SendAsync("ReceiveNotification", "System", "Connected successfully");
+
+            }
             await base.OnConnectedAsync();
+
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            var connection = _context.UserConnections
-                .FirstOrDefault(c => c.ConnectionId == Context.ConnectionId);
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            if (connection != null)
-            {
-                connection.IsConnected = false;
-                connection.DisconnectedAt = DateTime.UtcNow;
-
-                _context.UserConnections.Update(connection);
-                await _context.SaveChangesAsync();
-            }
-
+            await _connectionService.DisconnectAsync(Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
         }
 
