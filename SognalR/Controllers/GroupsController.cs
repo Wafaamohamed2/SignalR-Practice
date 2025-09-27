@@ -26,7 +26,6 @@ namespace SignalR.Controllers
         [HttpPost("Join")]
         public async Task<IActionResult> JoinGroup([FromBody] JoinGroupRequest request)
         {
-
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var groupName = request.GroupName;
 
@@ -72,15 +71,11 @@ namespace SignalR.Controllers
 
             // notify all group members that a new user has joined
             await _hubContext.Clients.Group(groupName)
-                .SendAsync("ReceiveNotification", "New Memaber ", $"{userId} Joined to {groupName}");
-
-  
+                .SendAsync("ReceiveNotification", "New Member", $"{userId} Joined to {groupName}");
 
             return Ok(new { message = $"User {userId} joined to group {groupName}" });
         }
 
-        public record JoinGroupRequest( string GroupName);
-
+        public record JoinGroupRequest(string GroupName);
     }
 }
-

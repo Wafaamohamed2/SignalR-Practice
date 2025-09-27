@@ -72,71 +72,19 @@ namespace SognalR.HubConfig
             await Clients.All.SendAsync("ReceiveMessage", name, message);
         }
 
-        public async Task  JoinGroup(string gName)
+    
+        public async Task SendNotification(string userId, string title, string notification)
         {
-            try
+            var connections = _context.UserConnections
+                .Where(c => c.UserId == userId && c.IsConnected)
+                .Select(c => c.ConnectionId)
+                .ToList();
+
+            foreach (var connectionId in connections)
             {
-                var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var name = Context.User?.Identity?.Name ?? "Anonymous";
-
-                if (string.IsNullOrEmpty(userId))
-                    throw new HubException("User not authenticated");
-
-                await Groups.AddToGroupAsync(Context.ConnectionId, gName);
-
-                var connection = _context.UserConnections
-                    .FirstOrDefault(c => c.ConnectionId == Context.ConnectionId);
-
-                if (connection != null)
-                {
-                    var group = _context.Groups.FirstOrDefault(g => g.Name == gName);
-                    if (group == null)
-                    {
-                        group = new Group
-                        {
-                            Id = Guid.NewGuid(),
-                            Name = gName
-
-                        };
-                        _context.Groups.Add(group);
-                        await _context.SaveChangesAsync();
-                    }
-                    var existingMembership = _context.UserGroups
-                       .FirstOrDefault(ug => ug.UserId == connection.UserId && ug.GroupId == group.Id);
-
-                    if (existingMembership == null)
-                    {
-                        var userGroup = new UserGroup
-                        {
-                            GroupId = group.Id,
-                            UserId = connection.UserId
-
-                        };
-                        _context.UserGroups.Add(userGroup);
-                       
-                    }
-                    await _context.SaveChangesAsync();
-                }
-
-
-
-                await Clients.OthersInGroup(gName).SendAsync("ShowWhoJoin", name, gName);
-            }         
-            catch (Exception ex)
-            {     
-                Console.WriteLine($"Error joining group: {ex.Message}");
-                throw; // Optionally rethrow or handle the exception as needed
+                await Clients.Client(connectionId).SendAsync("ReceiveNotification", title, notification);
             }
-
         }
-
-        public async Task SendMessageToGroup(string gName, string message)
-        {
-            var name = Context.User?.Identity?.Name ?? "Unknown";
-            await Clients.Group(gName).SendAsync("ReceiveGroupMessage", name, gName,message);
-        }
-
-      
 
         public override async Task OnConnectedAsync()
         {

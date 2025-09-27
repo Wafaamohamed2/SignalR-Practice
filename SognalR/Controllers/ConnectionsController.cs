@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using SignalR.Models;
-using SignalR.Services;
 using SognalR.HubConfig;
 using System.Security.Claims;
 
@@ -14,12 +13,13 @@ namespace SignalR.Controllers
     [Authorize]
     public class ConnectionsController : ControllerBase
     {
-        private readonly IConnectionService _connectionService;
+       private readonly IConnectionService _connectionService;
 
-        public ConnectionsController(IConnectionService connectionService)
+       public ConnectionsController(IConnectionService connectionService)
         {
-            _connectionService = connectionService;
+             _connectionService = connectionService;
         }
+
 
         [HttpGet("Online")]
         public IActionResult GetOnlineUsers()
@@ -40,6 +40,5 @@ namespace SignalR.Controllers
 
         }
 
-    
     }
 }

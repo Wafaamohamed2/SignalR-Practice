@@ -15,9 +15,9 @@ namespace SignalR.Controllers
     public class MessagesController : ControllerBase
     {
         private readonly IHubContext<ChatHub> _hubContext;
-        private readonly AppDbContext _context ;
+        private readonly AppDbContext _context;
 
-        public MessagesController(IHubContext<ChatHub> hubContext, AppDbContext context )
+        public MessagesController(IHubContext<ChatHub> hubContext, AppDbContext context)
         {
             _hubContext = hubContext;
             _context = context;
@@ -48,7 +48,7 @@ namespace SignalR.Controllers
 
             var isMember = _context.UserGroups.Any(ug => ug.UserId == userId && ug.GroupId == group.Id);
             if (!isMember)
-              return BadRequest(new { message = "You are not a member of this group" });
+                return BadRequest(new { message = "You are not a member of this group" });
 
             var senderName = User.Identity?.Name ?? "Anonymous";
 
@@ -57,8 +57,6 @@ namespace SignalR.Controllers
 
             return Ok(new { message = $"Message sent to group {request.GroupName}" });
         }
-
-
 
         public record GroupMessageRequest(string GroupName, string Message);
         public record BroadcastMessageRequest(string Message);
