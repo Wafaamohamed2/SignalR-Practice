@@ -252,6 +252,7 @@
         loginButton.addEventListener("click", async () => {
             const username = loginUsername.value.trim();
             const password = loginPassword.value.trim();
+
             if (!username || !password) {
                 alert("Enter username and password");
                 return;
@@ -264,29 +265,28 @@
                     body: JSON.stringify({ username, password })
                 });
 
-                if (!response.ok) {
-                    alert("Login failed");
+                // دايمًا استقبل JSON، حتى لو فيه Error
+                const result = await response.json();
+
+                if (!response.ok || !result.token) {
+                    alert("Login failed: " + (result.message || response.statusText));
                     return;
                 }
 
-                const data = await response.json();
-
-                token = data.token;
-                currentUserId = data.userId;  
-                currentUserName = data.username;
-
+                // حفظ الـ token
+                token = result.token;
                 localStorage.setItem("jwtToken", token);
-                sessionStorage.setItem("userId", currentUserId);
-
+                currentUserId = username;
                 currentUserSpan.textContent = username;
 
+                // Connect to SignalR
                 await initializeConnection();
-                await startConnection();    
 
-                addMessageToList("✅ Login & connection successful", "notification");
+                addMessageToList("✅ Login and connection successful", "notification");
+
             } catch (err) {
-                console.error("Login error:", err);
-                alert("Login request failed");
+                console.error("Login error: ", err);
+                alert("Login request failed: " + err.message);
             }
         });
 
