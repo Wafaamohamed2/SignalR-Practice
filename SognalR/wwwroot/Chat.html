@@ -85,11 +85,9 @@
 <body>
     <h1>SignalR Chat Application</h1>
 
-    <div id="connectionStatus" class="connection-status disconnected">
-        Disconnected
-    </div>
+    <div id="connectionStatus" class="connection-status disconnected">Disconnected</div>
 
-    <!-- Login Form -->
+    <!-- Login -->
     <div class="input-group">
         <input type="text" id="loginUsername" placeholder="Username" />
         <input type="password" id="loginPassword" placeholder="Password" />
@@ -97,26 +95,32 @@
     </div>
 
     <div class="input-group">
-        <input type="text" id="userInput" placeholder="Enter your name" />
-        <span>Current User: <span id="currentUser">Not set</span></span>
+        Current User: <span id="currentUser">Not set</span>
     </div>
 
+    <!-- Messages -->
     <div class="input-group">
         <input type="text" id="messageInput" placeholder="Type your message" />
         <input type="button" id="sendButton" value="Send Message" disabled />
     </div>
 
+    <!-- Groups -->
     <div class="input-group">
         <input type="text" id="gtxt" placeholder="Group name" />
         <input type="button" id="joinButton" value="Join Group" disabled />
         <input type="button" id="sendGroupButton" value="Send to Group" disabled />
     </div>
 
-    <ul id="messageList"></ul>
+    <!-- Notifications -->
+    <div class="input-group">
+        <input type="button" id="testNotificationButton" value="Test Notification" disabled />
+    </div>
 
+    <ul id="messageList"></ul>
     <script>
         let connection;
         let currentUserId = null;
+        let currentUserName = null;
         let isConnected = false;
         let token = localStorage.getItem("jwtToken");
 
@@ -129,13 +133,14 @@
         const sendButton = document.getElementById("sendButton");
         const joinButton = document.getElementById("joinButton");
         const sendGroupButton = document.getElementById("sendGroupButton");
+        const testNotificationButton = document.getElementById("testNotificationButton");
         const messageList = document.getElementById("messageList");
         const connectionStatus = document.getElementById("connectionStatus");
         const currentUserSpan = document.getElementById("currentUser");
         const groupInput = document.getElementById("gtxt");
 
-        // Initialize connection
-        function initializeConnection() {
+        // ✅ Initialize SignalR connection
+        async function initializeConnection() {
             connection = new signalR.HubConnectionBuilder()
                 .withUrl("/chatHub", {
                     accessTokenFactory: () => token
@@ -143,16 +148,17 @@
                 .withAutomaticReconnect()
                 .build();
 
+            // Receive normal message
             connection.on("ReceiveMessage", (name, message) => {
-                addMessageToList(`${name}: ${message}`);
+                addMessageToList(`💬 ${name}: ${message}`);
             });
 
-            connection.on("ShowWhoJoin", (name, gName) => {
-                addMessageToList(`🔔 ${name} joined group (${gName})`, "notification");
+            connection.on("ReceiveGroupMessage", (name, group, message) => {
+                addMessageToList(`👥 [${group}] ${name}: ${message}`);
             });
-
-            connection.on("ReceiveGroupMessage", (name, gName, message) => {
-                addMessageToList(`${name}: ${message}`);
+            // Receive notification
+            connection.on("ReceiveNotification", (title, message) => {
+                addMessageToList(`🔔 ${title}: ${message}`, "notification");
             });
 
             connection.onclose(() => {
@@ -168,55 +174,72 @@
             connection.onreconnected(() => {
                 updateConnectionStatus(true);
                 addMessageToList("✅ Reconnected", "notification");
-                if (currentUserId) {
-                    registerUser();
-                }
             });
+
+            await connection.start();
+            console.log("Connected with ID:", connection.connectionId);
+
+            updateConnectionStatus(true);
         }
 
-        // Start connection
-        function startConnection() {
-            if (!token) {
-                alert("You must login first!");
-                return;
-            }
-
-            connection.start()
-                .then(() => {
-                    updateConnectionStatus(true);
-                    addMessageToList("✅ Connected to the chat server", "notification");
-                    return registerUser();
-                })
-                .catch(err => {
-                    console.error(err.toString());
-                    addMessageToList("❌ Connection failed", "error");
-                    updateConnectionStatus(false);
-                });
-        }
-
-        // Register user with server
-        function registerUser() {
-            if (connection && isConnected) {
-                return connection.invoke("RegisterUser")
-                    .catch(err => {
-                        console.error("RegisterUser failed: ", err);
-                        addMessageToList("❌ Registration failed: " + err.message, "error");
-                    });
-            }
-        }
-
-        // Update connection status UI
+        // ✅ Update connection status
         function updateConnectionStatus(connected) {
             isConnected = connected;
             connectionStatus.textContent = connected ? "Connected" : "Disconnected";
             connectionStatus.className = `connection-status ${connected ? "connected" : "disconnected"}`;
-
             sendButton.disabled = !connected;
             joinButton.disabled = !connected;
             sendGroupButton.disabled = !connected;
+            testNotificationButton.disabled = !connected;
         }
 
-        // Add message to the list
+        // ✅ Send a direct message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            connection.invoke("SendMessage", message)
+                .then(() => { messageInput.value = ""; })
+                .catch(err => {
+                    console.error("SendMessage failed:", err);
+                    addMessageToList("❌ Failed to send: " + err.message, "error");
+                });
+        }
+
+        // ✅ Test notification via API
+        async function testNotification() {
+            if (!currentUserId) {
+                alert("Please login first");
+                return;
+            }
+
+            try {
+                const response = await fetch("/api/Notifications/SendNotification", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        title: "Test Notification",
+                        notification: "This is a test notification!"
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    addMessageToList("📤 " + data.message, "notification");
+                } else {
+                    addMessageToList("❌ " + data.message, "error");
+                }
+            } catch (err) {
+                console.error("Test notification error:", err);
+                addMessageToList("❌ Failed to send notification", "error");
+            }
+        }
+
+        // ✅ Add message to UI
         function addMessageToList(message, cssClass = "") {
             const li = document.createElement("li");
             li.textContent = message;
@@ -225,67 +248,7 @@
             messageList.scrollTop = messageList.scrollHeight;
         }
 
-        // Event Listeners
-        userInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter" && !isConnected) {
-                startConnection();
-            }
-        });
-
-        userInput.addEventListener("blur", () => {
-            if (!isConnected && userInput.value.trim()) {
-                startConnection();
-            }
-        });
-
-        messageInput.addEventListener("keypress", (e) => {
-            if (e.key === "Enter" && isConnected) {
-                sendMessage();
-            }
-        });
-
-        sendButton.addEventListener("click", sendMessage);
-
-        joinButton.addEventListener("click", () => {
-            const groupName = groupInput.value.trim();
-            if (!groupName) {
-                alert("Please enter a group name");
-                groupInput.focus();
-                return;
-            }
-
-            connection.invoke("JoinGroup", groupName)
-                .then(() => addMessageToList(`📝 You joined group: ${groupName}`, "notification"))
-                .catch(err => {
-                    console.error("JoinGroup failed: ", err);
-                    addMessageToList("❌ Failed to join group: " + err.message, "error");
-                });
-        });
-
-        sendGroupButton.addEventListener("click", () => {
-            const groupName = groupInput.value.trim();
-            const message = messageInput.value.trim();
-
-            if (!groupName) {
-                alert("Please enter a group name");
-                groupInput.focus();
-                return;
-            }
-            if (!message) {
-                alert("Please enter a message");
-                messageInput.focus();
-                return;
-            }
-
-            connection.invoke("SendMessageToGroup", groupName, message)
-                .then(() => { messageInput.value = ""; })
-                .catch(err => {
-                    console.error("SendMessageToGroup failed: ", err);
-                    addMessageToList("❌ Failed to send group message: " + err.message, "error");
-                });
-        });
-
-        // Login
+        // ✅ Login
         loginButton.addEventListener("click", async () => {
             const username = loginUsername.value.trim();
             const password = loginPassword.value.trim();
@@ -307,55 +270,107 @@
                 }
 
                 const data = await response.json();
+
                 token = data.token;
+                currentUserId = data.userId;  
+                currentUserName = data.username;
+
                 localStorage.setItem("jwtToken", token);
-                currentUserId = username;
+                sessionStorage.setItem("userId", currentUserId);
+
                 currentUserSpan.textContent = username;
-                initializeConnection();
-                startConnection();
+
+                await initializeConnection();
+                await startConnection();    
+
+                addMessageToList("✅ Login & connection successful", "notification");
             } catch (err) {
-                console.error("Login error: ", err);
+                console.error("Login error:", err);
                 alert("Login request failed");
             }
         });
 
-        // Initialize on page load
-        window.addEventListener("load", () => {
-            initializeConnection();
-            updateConnectionStatus(false);
-
-            const storedUserId = sessionStorage.getItem("userId");
-            if (storedUserId) {
-                userInput.value = storedUserId;
-                currentUserSpan.textContent = storedUserId;
-            }
-
-            if (token) startConnection();
-            userInput.focus();
+        // Events
+        sendButton.addEventListener("click", sendMessage);
+        messageInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter" && isConnected) sendMessage();
         });
 
-        // Save user info on unload
-        window.addEventListener("beforeunload", () => {
-            if (currentUserId) {
-                sessionStorage.setItem("userId", currentUserId);
-            }
-        });
-
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) {
-                alert("Please enter a message");
-                messageInput.focus();
+        joinButton.addEventListener("click", async () => {
+            const groupName = groupInput.value.trim();
+            if (!groupName) {
+                alert("Please enter a group name");
+                groupInput.focus();
                 return;
             }
 
-            connection.invoke("SendMessage", message)
-                .then(() => { messageInput.value = ""; })
-                .catch(err => {
-                    console.error("SendMessage failed: ", err);
-                    addMessageToList("❌ Failed to send message: " + err.message, "error");
+            try {
+                const response = await fetch("/api/Groups/Join", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ groupName })
                 });
-        }
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    addMessageToList("✅ " + data.message, "notification");
+                } else {
+
+                    addMessageToList("⚠️ " + data.message, "notification");
+                }
+            } catch (err) {
+                console.error("JoinGroup API failed: ", err);
+                addMessageToList("❌ Request failed", "error");
+            }
+        });
+
+        sendGroupButton.addEventListener("click", async () => {
+            const groupName = groupInput.value.trim();
+            const message = messageInput.value.trim();
+
+            if (!groupName || !message) {
+                alert("Please enter a group name and a message");
+                return;
+            }
+
+            try {
+                const response = await fetch("/api/Messages/SendToGroup", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        groupName: groupName,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    addMessageToList("📤 " + data.message, "notification");
+                    messageInput.value = "";
+                } else {
+                    addMessageToList("❌ Failed: " + data.message, "error");
+                }
+            } catch (err) {
+                console.error("SendToGroup API failed: ", err);
+                addMessageToList("❌ Request failed", "error");
+            }
+        });
+
+
+        testNotificationButton.addEventListener("click", testNotification);
+
+        // On page load
+        window.addEventListener("load", () => {
+            updateConnectionStatus(false);
+        });
     </script>
+
 </body>
 </html>

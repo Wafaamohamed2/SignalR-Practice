@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using SignalR.Models;
+using SignalR.Services;
+using SognalR.HubConfig;
 using System.Security.Claims;
 
 namespace SignalR.Controllers
@@ -11,51 +14,32 @@ namespace SignalR.Controllers
     [Authorize]
     public class ConnectionsController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly IConnectionService _connectionService;
 
-        public ConnectionsController(AppDbContext context)
+        public ConnectionsController(IConnectionService connectionService)
         {
-            _context = context;
+            _connectionService = connectionService;
         }
 
         [HttpGet("Online")]
         public IActionResult GetOnlineUsers()
         {
-            var users = _context.UserConnections
-                  .Where(x => x.IsConnected)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.ConnectionId,
-                    x.ConnectedAt
-                })
-                .ToList();
-
+            var users = _connectionService.GetOnlineUsers();
             return Ok(users);
         }
 
-        [HttpGet("{userId}")]
+        [HttpGet("MyConnections")]
         public IActionResult GetUserConnections()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
             if (string.IsNullOrEmpty(userId))
                 return Unauthorized("User not authenticated");
 
-            var connections = _context.UserConnections
-                .Where(x => x.UserId == userId && x.IsConnected)
-                .Select(c => new
-                {
-                    c.ConnectionId,
-                    c.ConnectedAt
-                })
-                .ToList();
-
-            if (!connections.Any())
-                return NotFound($"No active connections found for user {userId}");
-
+            var connections = _connectionService.GetUserConnections(userId);
             return Ok(connections);
 
         }
+
+    
     }
 }

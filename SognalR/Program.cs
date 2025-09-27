@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SignalR.Models;
+using SignalR.Services;
 using SognalR.HubConfig;
 using System.Text;
 
@@ -26,6 +27,7 @@ namespace SognalR
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
             builder.Services.AddSignalR();
+            builder.Services.AddScoped<IConnectionService, ConnectionService>();
 
             // Identity services
             builder.Services.AddIdentity<IdentityUser, IdentityRole>()
