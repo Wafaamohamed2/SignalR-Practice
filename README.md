@@ -67,3 +67,14 @@
       - Status Updates: Connection and activity notifications
   
           
+ ## SignalR Hub Methods:
+   1. Client to Server
+      - RegisterUser(): Register user connection
+      - SendMessage(message): Send message to all users
+      - JoinGroup(groupName): Join a specific group
+      - SendMessageToGroup(groupName, message): Send message to group
+   2. Server to Client
+      - ReceiveMessage(name, message): Receive general messages
+      - ReceiveGroupMessage(name, groupName, message): Receive group messages
+      - ReceiveNotification(title, message): Receive notifications
+      - ShowWhoJoin(name, groupName): Notification when someone joins group   
